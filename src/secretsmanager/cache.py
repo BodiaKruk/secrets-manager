@@ -150,7 +150,7 @@ class CachedSecretProvider(SecretProvider):
         result: str,
         backend: str,
         duration_ms: float,
-        error: str = "",
+        error_message: str = "",
         **extra: Any,
     ) -> None:
         if self._audit is None:
@@ -162,7 +162,7 @@ class CachedSecretProvider(SecretProvider):
             result=result,
             backend=backend,
             duration_ms=duration_ms,
-            error=error,
+            error_message=error_message,
             **extra,
         )
 
@@ -264,7 +264,7 @@ class CachedSecretProvider(SecretProvider):
                         result=AuditLogger.FALLBACK,
                         backend=self._fallback.backend_name,
                         duration_ms=(time.perf_counter() - t0) * 1000,
-                        primary_error=type(primary_exc).__name__,
+                        primary_error_message=type(primary_exc).__name__,
                     )
                     return fb_secret
                 except Exception as fb_exc:
@@ -274,7 +274,7 @@ class CachedSecretProvider(SecretProvider):
                         result=AuditLogger.ERROR,
                         backend=self._fallback.backend_name,
                         duration_ms=(time.perf_counter() - t0) * 1000,
-                        error=f"fallback failed: {fb_exc}",
+                        error_message=f"fallback failed: {fb_exc}",
                     )
             self._audit_log(
                 secret_name=name,
@@ -282,7 +282,7 @@ class CachedSecretProvider(SecretProvider):
                 result=AuditLogger.ERROR,
                 backend=self.backend_name,
                 duration_ms=(time.perf_counter() - t0) * 1000,
-                error=str(primary_exc),
+                error_message=str(primary_exc),
             )
             raise
 
@@ -331,7 +331,7 @@ class CachedSecretProvider(SecretProvider):
                 result=AuditLogger.ERROR,
                 backend=self.backend_name,
                 duration_ms=(time.perf_counter() - t0) * 1000,
-                error=str(exc),
+                error_message=str(exc),
             )
             raise
 

@@ -1,8 +1,11 @@
-"""AWS Secrets Manager adapter via boto3."""
+"""AWS Secrets Manager adapter via boto3.
+
+Handles both SecretString (UTF-8 text) and SecretBinary (base64-encoded binary).
+"""
 
 from __future__ import annotations
 
-import json
+import base64
 import time
 from typing import Any
 
@@ -22,7 +25,7 @@ _ACCESS_DENIED_CODES = frozenset({"AccessDeniedException", "UnauthorizedOperatio
 _NOT_FOUND_CODES = frozenset({"ResourceNotFoundException", "SecretNotFound"})
 
 
-class AWSSecretsManagerAdapter(SecretProvider):
+class AwsSecretsManagerAdapter(SecretProvider):
     """Adapter for AWS Secrets Manager.
 
     Args:
@@ -51,7 +54,7 @@ class AWSSecretsManagerAdapter(SecretProvider):
 
     @property
     def backend_name(self) -> str:
-        return "aws"
+        return "aws_secrets_manager"
 
     # ------------------------------------------------------------------
     # Error mapping
@@ -70,6 +73,11 @@ class AWSSecretsManagerAdapter(SecretProvider):
     # ------------------------------------------------------------------
 
     def get_secret(self, name: str, *, version: str | None = None) -> SecretValue:
+        """Retrieve a secret value.
+
+        Supports both ``SecretString`` (text) and ``SecretBinary`` (binary data
+        returned as a base64-encoded string for uniform handling downstream).
+        """
         kw: dict[str, Any] = {"SecretId": name}
         if version is not None:
             kw["VersionId"] = version
@@ -80,7 +88,12 @@ class AWSSecretsManagerAdapter(SecretProvider):
         except (EndpointResolutionError, Exception) as exc:
             raise BackendUnavailableError(str(exc), backend=self.backend_name, path=name) from exc
 
+        # SecretString takes priority; SecretBinary is returned as base64.
         raw: str = resp.get("SecretString") or ""
+        if not raw:
+            binary_data: bytes = resp.get("SecretBinary") or b""
+            raw = base64.b64encode(binary_data).decode("utf-8")
+
         return SecretValue(
             value=raw,
             version=resp.get("VersionId", ""),
@@ -141,7 +154,7 @@ class AWSSecretsManagerAdapter(SecretProvider):
             self._raise(exc, prefix)
         except Exception as exc:
             raise BackendUnavailableError(str(exc), backend=self.backend_name, path=prefix) from exc
-        return []  # unreachable — satisfies mypy
+        return []
 
     def rotate_secret(self, name: str, *, policy: RotationPolicy | None = None) -> str:
         try:
@@ -158,3 +171,7 @@ class AWSSecretsManagerAdapter(SecretProvider):
             return True
         except Exception:
             return False
+
+
+# Backward-compatible alias (pre-rename)
+AWSSecretsManagerAdapter = AwsSecretsManagerAdapter

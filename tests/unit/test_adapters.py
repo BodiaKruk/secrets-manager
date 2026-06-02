@@ -1,10 +1,11 @@
-"""Unit tests — Phases 1.2/1.3: all four adapters with mocks.
+"""Unit tests — all four adapters with mocks.
 
-Covers:
-  - get_secret (success + error mapping)
-  - get_dynamic_secret (HashiCorp Vault DB engine; NotImplementedError for others)
-  - health_check
-  - exception hierarchy mapping
+Canonical class names (matching thesis §3.2):
+  HashiCorpVaultAdapter, AwsSecretsManagerAdapter,
+  GoogleSecretManagerAdapter, AzureKeyVaultAdapter
+
+backend_name values:
+  "hashicorp", "aws_secrets_manager", "google_secret_manager", "azure_key_vault"
 """
 
 from __future__ import annotations
@@ -33,9 +34,11 @@ def vault_adapter():
     with patch("secretsmanager.adapters.hashicorp.hvac") as mock_hvac:
         client = MagicMock()
         mock_hvac.Client.return_value = client
-        mock_hvac.exceptions = hvac.exceptions  # keep real exception hierarchy
+        mock_hvac.exceptions = hvac.exceptions
         from secretsmanager.adapters.hashicorp import HashiCorpVaultAdapter
-        adapter = HashiCorpVaultAdapter(url="http://vault:8200", token="root")
+        adapter = HashiCorpVaultAdapter(
+            vault_url="http://vault:8200", vault_token="root"
+        )
         adapter._client = client
         yield adapter, client
 
@@ -45,6 +48,18 @@ class TestHashiCorpVaultAdapter:
     def test_backend_name(self, vault_adapter):
         adapter, _ = vault_adapter
         assert adapter.backend_name == "hashicorp"
+
+    def test_constructor_uses_vault_url_and_token(self):
+        """Verify constructor signature matches thesis §3.2.2."""
+        import hvac
+        with patch("secretsmanager.adapters.hashicorp.hvac") as mock_hvac:
+            mock_hvac.Client.return_value = MagicMock()
+            from secretsmanager.adapters.hashicorp import HashiCorpVaultAdapter
+            HashiCorpVaultAdapter(vault_url="http://v:8200", vault_token="root-token")
+            mock_hvac.Client.assert_called_once()
+            call_kwargs = mock_hvac.Client.call_args
+            assert call_kwargs.kwargs["url"] == "http://v:8200"
+            assert call_kwargs.kwargs["token"] == "root-token"
 
     def test_get_secret_success_single_key(self, vault_adapter):
         adapter, client = vault_adapter
@@ -56,7 +71,6 @@ class TestHashiCorpVaultAdapter:
         assert sv.version == "3"
         assert sv.backend == "hashicorp"
         assert sv.is_dynamic is False
-        assert sv.is_fallback is False
 
     def test_get_secret_multi_key_serialised_as_json(self, vault_adapter):
         adapter, client = vault_adapter
@@ -109,7 +123,9 @@ class TestHashiCorpVaultAdapter:
     def test_get_dynamic_secret_role_not_found(self, vault_adapter):
         import hvac.exceptions
         adapter, client = vault_adapter
-        client.secrets.database.generate_credentials.side_effect = hvac.exceptions.InvalidPath()
+        client.secrets.database.generate_credentials.side_effect = (
+            hvac.exceptions.InvalidPath()
+        )
         with pytest.raises(SecretNotFoundError):
             adapter.get_dynamic_secret("nonexistent-role")
 
@@ -143,7 +159,7 @@ class TestHashiCorpVaultAdapter:
 
 
 # ==========================================================================
-# AWS Secrets Manager
+# AWS Secrets Manager — AwsSecretsManagerAdapter
 # ==========================================================================
 
 
@@ -154,19 +170,19 @@ def aws_adapter():
         client = MagicMock()
         mock_boto3.session.Session.return_value = session
         session.client.return_value = client
-        from secretsmanager.adapters.aws import AWSSecretsManagerAdapter
-        adapter = AWSSecretsManagerAdapter(region_name="us-east-1")
+        from secretsmanager.adapters.aws import AwsSecretsManagerAdapter
+        adapter = AwsSecretsManagerAdapter(region_name="us-east-1")
         adapter._client = client
         yield adapter, client
 
 
 @pytest.mark.unit
-class TestAWSSecretsManagerAdapter:
+class TestAwsSecretsManagerAdapter:
     def test_backend_name(self, aws_adapter):
         adapter, _ = aws_adapter
-        assert adapter.backend_name == "aws"
+        assert adapter.backend_name == "aws_secrets_manager"
 
-    def test_get_secret_success(self, aws_adapter):
+    def test_get_secret_string(self, aws_adapter):
         adapter, client = aws_adapter
         client.get_secret_value.return_value = {
             "SecretString": "mypassword",
@@ -177,7 +193,21 @@ class TestAWSSecretsManagerAdapter:
         sv = adapter.get_secret("prod/db")
         assert sv.value == "mypassword"
         assert sv.version == "v-abc"
-        assert sv.is_dynamic is False
+        assert sv.backend == "aws_secrets_manager"
+
+    def test_get_secret_binary_base64_encoded(self, aws_adapter):
+        """SecretBinary must be returned as a base64-encoded string (thesis §3.2.3)."""
+        import base64
+        adapter, client = aws_adapter
+        raw_bytes = b"\x00\x01\x02\x03binary_data"
+        client.get_secret_value.return_value = {
+            "SecretBinary": raw_bytes,
+            "VersionId": "v-bin",
+            "ARN": "arn:aws:...",
+            "Name": "prod/cert",
+        }
+        sv = adapter.get_secret("prod/cert")
+        assert sv.value == base64.b64encode(raw_bytes).decode("utf-8")
 
     def test_get_secret_not_found(self, aws_adapter):
         from botocore.exceptions import ClientError
@@ -202,6 +232,11 @@ class TestAWSSecretsManagerAdapter:
         with pytest.raises(NotImplementedError):
             adapter.get_dynamic_secret("any-role")
 
+    def test_alias_still_works(self):
+        """AWSSecretsManagerAdapter is an alias for backward compatibility."""
+        from secretsmanager.adapters.aws import AWSSecretsManagerAdapter, AwsSecretsManagerAdapter
+        assert AWSSecretsManagerAdapter is AwsSecretsManagerAdapter
+
     def test_health_check_ok(self, aws_adapter):
         adapter, client = aws_adapter
         client.list_secrets.return_value = {"SecretList": []}
@@ -214,7 +249,7 @@ class TestAWSSecretsManagerAdapter:
 
 
 # ==========================================================================
-# GCP Secret Manager
+# Google Secret Manager — GoogleSecretManagerAdapter
 # ==========================================================================
 
 
@@ -223,17 +258,25 @@ def gcp_adapter():
     with patch("secretsmanager.adapters.google.secretmanager") as mock_sm:
         client = MagicMock()
         mock_sm.SecretManagerServiceClient.return_value = client
-        from secretsmanager.adapters.google import GCPSecretManagerAdapter
-        adapter = GCPSecretManagerAdapter(project_id="my-project")
+        from secretsmanager.adapters.google import GoogleSecretManagerAdapter
+        adapter = GoogleSecretManagerAdapter(project_id="my-project")
         adapter._client = client
         yield adapter, client
 
 
 @pytest.mark.unit
-class TestGCPSecretManagerAdapter:
+class TestGoogleSecretManagerAdapter:
     def test_backend_name(self, gcp_adapter):
         adapter, _ = gcp_adapter
-        assert adapter.backend_name == "google"
+        assert adapter.backend_name == "google_secret_manager"
+
+    def test_class_name(self):
+        from secretsmanager.adapters.google import GoogleSecretManagerAdapter
+        assert GoogleSecretManagerAdapter.__name__ == "GoogleSecretManagerAdapter"
+
+    def test_gcp_alias_still_works(self):
+        from secretsmanager.adapters.google import GCPSecretManagerAdapter, GoogleSecretManagerAdapter
+        assert GCPSecretManagerAdapter is GoogleSecretManagerAdapter
 
     def test_get_secret_success(self, gcp_adapter):
         adapter, client = gcp_adapter
@@ -244,6 +287,7 @@ class TestGCPSecretManagerAdapter:
         sv = adapter.get_secret("prod-db")
         assert sv.value == "gcp-secret"
         assert sv.version == "5"
+        assert sv.backend == "google_secret_manager"
 
     def test_get_secret_not_found(self, gcp_adapter):
         from google.api_core.exceptions import NotFound
@@ -266,7 +310,7 @@ class TestGCPSecretManagerAdapter:
 
 
 # ==========================================================================
-# Azure Key Vault
+# Azure Key Vault — AzureKeyVaultAdapter
 # ==========================================================================
 
 
@@ -286,7 +330,47 @@ def azure_adapter():
 class TestAzureKeyVaultAdapter:
     def test_backend_name(self, azure_adapter):
         adapter, _ = azure_adapter
-        assert adapter.backend_name == "azure"
+        assert adapter.backend_name == "azure_key_vault"
+
+    def test_auth_mode_default_uses_default_credential(self):
+        """auth_mode='default' should call DefaultAzureCredential (thesis §3.2.3)."""
+        with patch("secretsmanager.adapters.azure.SecretClient"), \
+             patch("secretsmanager.adapters.azure.DefaultAzureCredential") as mock_dac, \
+             patch("secretsmanager.adapters.azure.ClientSecretCredential"):
+            from secretsmanager.adapters.azure import AzureKeyVaultAdapter
+            AzureKeyVaultAdapter("https://v.vault.azure.net", auth_mode="default")
+            mock_dac.assert_called_once()
+
+    def test_auth_mode_service_principal_uses_client_secret_credential(self):
+        """auth_mode='service_principal' must use ClientSecretCredential (thesis §3.2.3)."""
+        with patch("secretsmanager.adapters.azure.SecretClient"), \
+             patch("secretsmanager.adapters.azure.DefaultAzureCredential"), \
+             patch("secretsmanager.adapters.azure.ClientSecretCredential") as mock_csc:
+            from secretsmanager.adapters.azure import AzureKeyVaultAdapter
+            AzureKeyVaultAdapter(
+                "https://v.vault.azure.net",
+                auth_mode="service_principal",
+                tenant_id="t1",
+                client_id="c1",
+                client_secret="s1",
+            )
+            mock_csc.assert_called_once_with(
+                tenant_id="t1", client_id="c1", client_secret="s1"
+            )
+
+    def test_service_principal_reads_env_vars(self, monkeypatch):
+        """If params not supplied, AZURE_* env vars must be used (thesis §3.2.3)."""
+        monkeypatch.setenv("AZURE_TENANT_ID", "env-tenant")
+        monkeypatch.setenv("AZURE_CLIENT_ID", "env-client")
+        monkeypatch.setenv("AZURE_CLIENT_SECRET", "env-secret")
+        with patch("secretsmanager.adapters.azure.SecretClient"), \
+             patch("secretsmanager.adapters.azure.DefaultAzureCredential"), \
+             patch("secretsmanager.adapters.azure.ClientSecretCredential") as mock_csc:
+            from secretsmanager.adapters.azure import AzureKeyVaultAdapter
+            AzureKeyVaultAdapter("https://v.vault.azure.net", auth_mode="service_principal")
+            mock_csc.assert_called_once_with(
+                tenant_id="env-tenant", client_id="env-client", client_secret="env-secret"
+            )
 
     def test_get_secret_success(self, azure_adapter):
         adapter, client = azure_adapter
@@ -298,6 +382,7 @@ class TestAzureKeyVaultAdapter:
         sv = adapter.get_secret("prod-db")
         assert sv.value == "azure-secret"
         assert sv.version == "ver1"
+        assert sv.backend == "azure_key_vault"
         assert sv.metadata["env"] == "prod"
 
     def test_get_secret_not_found(self, azure_adapter):

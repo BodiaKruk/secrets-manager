@@ -287,7 +287,7 @@ class PolicyTranslator:
     def toGcpIamCond(
         doc: dict[str, Any],
         *,
-        gcp_project: str = "PROJECT_ID",
+        project_id: str = "PROJECT_ID",
     ) -> list[dict[str, Any]]:
         """Return GCP IAM binding dicts with optional CEL resource conditions.
 
@@ -341,7 +341,7 @@ class PolicyTranslator:
             if "*" in raw_path or "+" in raw_path:
                 prefix = raw_path.rstrip("/*+").rstrip("/")
                 cel = (
-                    f'resource.name.startsWith("projects/{gcp_project}'
+                    f'resource.name.startsWith("projects/{project_id}'
                     f'/secrets/{prefix}/")'
                 )
                 slug = re.sub(r"[^a-z0-9_]", "_", prefix.lower())[:64]
@@ -351,7 +351,7 @@ class PolicyTranslator:
                 }
             result.append(binding)
 
-        return sorted(result, key=lambda b: (b["role"], b["members"][0]))
+        return sorted(result, key=lambda b: (b["role"], b["members"][0]))  # type: ignore[index]
 
     # ------------------------------------------------------------------
     # Phase 3 — Azure RBAC assignments

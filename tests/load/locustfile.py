@@ -34,7 +34,7 @@ def seed_secret(environment, **kwargs):  # type: ignore[misc]
     try:
         from secretsmanager.adapters.hashicorp import HashiCorpVaultAdapter
 
-        adapter = HashiCorpVaultAdapter(url=VAULT_ADDR, token=VAULT_TOKEN, verify_ssl=False)
+        adapter = HashiCorpVaultAdapter(vault_url=VAULT_ADDR, vault_token=VAULT_TOKEN, verify_ssl=False)
         adapter.set_secret(SECRET_PATH, "benchmark-value-xyz")
         print(f"[locust] Seeded secret at {SECRET_PATH}")
     except Exception as exc:
@@ -110,7 +110,7 @@ class CachedVaultUser(User):
         from secretsmanager.adapters.hashicorp import HashiCorpVaultAdapter
         from secretsmanager.cache import CachedSecretProvider
 
-        raw = HashiCorpVaultAdapter(url=VAULT_ADDR, token=VAULT_TOKEN, verify_ssl=False)
+        raw = HashiCorpVaultAdapter(vault_url=VAULT_ADDR, vault_token=VAULT_TOKEN, verify_ssl=False)
         self._adapter = CachedSecretProvider(raw, ttl=60)
 
     @task

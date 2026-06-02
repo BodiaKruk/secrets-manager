@@ -31,8 +31,8 @@ class HashiCorpVaultAdapter(SecretProvider):
     for ``get_dynamic_secret`` (generates short-lived DB credentials).
 
     Args:
-        url:          Vault server address, e.g. ``"http://127.0.0.1:8200"``.
-        token:        Vault token.
+        vault_url:    Vault server address, e.g. ``"http://127.0.0.1:8200"``.
+        vault_token:  Vault token (root, AppRole secret-id, etc.).
         mount_point:  KV v2 mount path (default ``"secret"``).
         db_mount:     Database engine mount path (default ``"database"``).
         namespace:    Vault Enterprise namespace (optional).
@@ -41,8 +41,8 @@ class HashiCorpVaultAdapter(SecretProvider):
 
     def __init__(
         self,
-        url: str,
-        token: str,
+        vault_url: str,
+        vault_token: str,
         *,
         mount_point: str = "secret",
         db_mount: str = "database",
@@ -52,8 +52,8 @@ class HashiCorpVaultAdapter(SecretProvider):
         self._mount = mount_point
         self._db_mount = db_mount
         self._client = hvac.Client(
-            url=url,
-            token=token,
+            url=vault_url,
+            token=vault_token,
             namespace=namespace,
             verify=verify_ssl,
         )

@@ -21,7 +21,7 @@ def vault():
     pytest.importorskip("hvac")
     from secretsmanager.adapters.hashicorp import HashiCorpVaultAdapter
 
-    adapter = HashiCorpVaultAdapter(url=VAULT_URL, token=VAULT_TOKEN, verify_ssl=False)
+    adapter = HashiCorpVaultAdapter(vault_url=VAULT_URL, vault_token=VAULT_TOKEN, verify_ssl=False)
     if not adapter.health_check():
         pytest.skip("Vault dev server not reachable")
     return adapter
@@ -73,7 +73,7 @@ def test_vault_cache_integration(vault):
     """Smoke test: cached adapter returns same value as direct adapter."""
     from secretsmanager.cache import CachedSecretProvider
 
-    cached = CachedSecretProvider(vault, ttl=30)
+    cached = CachedSecretProvider(vault, ttl_seconds=30)
     vault.set_secret("integration/cached-key", "cached-value")
     sv1 = cached.get_secret("integration/cached-key")
     sv2 = cached.get_secret("integration/cached-key")

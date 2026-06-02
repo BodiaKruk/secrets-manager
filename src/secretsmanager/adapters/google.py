@@ -22,12 +22,12 @@ from secretsmanager.interface import (
 )
 
 
-class GCPSecretManagerAdapter(SecretProvider):
+class GoogleSecretManagerAdapter(SecretProvider):
     """Adapter for Google Cloud Secret Manager.
 
     Args:
         project_id:  GCP project ID.
-        credentials: Optional Credentials object (falls back to ADC).
+        credentials: Optional Credentials object (falls back to ADC / Workload Identity).
     """
 
     def __init__(self, project_id: str, *, credentials: Any = None) -> None:
@@ -36,7 +36,7 @@ class GCPSecretManagerAdapter(SecretProvider):
 
     @property
     def backend_name(self) -> str:
-        return "google"
+        return "google_secret_manager"
 
     # ------------------------------------------------------------------
     # Helpers
@@ -150,3 +150,7 @@ class GCPSecretManagerAdapter(SecretProvider):
             return True
         except (AccessDeniedError, BackendUnavailableError):
             return False
+
+
+# Backward-compatible alias (pre-rename)
+GCPSecretManagerAdapter = GoogleSecretManagerAdapter

@@ -18,9 +18,9 @@ LOCALSTACK_ENDPOINT = os.getenv("LOCALSTACK_ENDPOINT", "http://localhost:4566")
 @pytest.fixture(scope="module")
 def aws():
     pytest.importorskip("boto3")
-    from secretsmanager.adapters.aws import AWSSecretsManagerAdapter
+    from secretsmanager.adapters.aws import AwsSecretsManagerAdapter
 
-    adapter = AWSSecretsManagerAdapter(
+    adapter = AwsSecretsManagerAdapter(
         region_name="us-east-1",
         aws_access_key_id="test",
         aws_secret_access_key="test",

@@ -75,7 +75,7 @@ class AuditRecord:
         result:      ``"hit" | "miss" | "fallback" | "success" | "error"``.
         backend:     Provider tag, e.g. ``"hashicorp"``.
         duration_ms: Wall-clock time for the operation in milliseconds.
-        error:       Exception class name + message on ``result="error"``.
+        error_message: Exception class name + message on ``result="error"``.
         extra:       Freeform dict for version, lease_duration, etc.
     """
 
@@ -87,7 +87,7 @@ class AuditRecord:
     result: str
     backend: str
     duration_ms: float
-    error: str = ""
+    error_message: str = ""
     extra: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -144,7 +144,7 @@ class AuditLogger:
         result: str,
         backend: str,
         duration_ms: float,
-        error: str = "",
+        error_message: str = "",
         **extra: Any,
     ) -> AuditRecord:
         """Append one audit record.
@@ -160,7 +160,7 @@ class AuditLogger:
             result=result,
             backend=backend,
             duration_ms=round(duration_ms, 3),
-            error=error,
+            error_message=error_message,
             extra=dict(extra),
         )
         with self._lock:
@@ -186,14 +186,14 @@ class AuditLogger:
         result: str | None = None,
         backend: str | None = None,
         client_id: str | None = None,
-        from_time: datetime | None = None,
-        to_time: datetime | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
         limit: int = 100,
     ) -> list[AuditRecord]:
         """Filter records and return them sorted by timestamp descending.
 
         All filter arguments are optional and ANDed together.
-        ``from_time`` / ``to_time`` are inclusive timezone-aware datetimes.
+        ``start_time`` / ``end_time`` are inclusive timezone-aware datetimes.
         """
         with self._lock:
             records = list(self._buffer)
@@ -209,13 +209,13 @@ class AuditLogger:
                 return False
             if client_id is not None and r.client_id != client_id:
                 return False
-            if from_time is not None:
+            if start_time is not None:
                 rec_dt = datetime.fromisoformat(r.timestamp)
-                if rec_dt < from_time:
+                if rec_dt < start_time:
                     return False
-            if to_time is not None:
+            if end_time is not None:
                 rec_dt = datetime.fromisoformat(r.timestamp)
-                if rec_dt > to_time:
+                if rec_dt > end_time:
                     return False
             return True
 

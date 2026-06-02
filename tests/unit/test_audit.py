@@ -149,13 +149,13 @@ class TestAuditLoggerQuery:
             _log(logger)
         assert len(logger.query(limit=3)) == 3
 
-    def test_query_from_time(self, logger):
+    def test_query_start_time(self, logger):
         _log(logger, secret_name="old")
         time.sleep(0.01)
         boundary = datetime.now(tz=timezone.utc)
         time.sleep(0.01)
         _log(logger, secret_name="new")
-        results = logger.query(from_time=boundary)
+        results = logger.query(start_time=boundary)
         assert len(results) == 1
         assert results[0].secret_name == "new"
 

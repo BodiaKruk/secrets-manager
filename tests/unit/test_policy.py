@@ -183,13 +183,13 @@ class TestToGcpIamCond:
         assert any(m.startswith("serviceAccount:") for m in members)
 
     def test_wildcard_path_has_cel_condition(self, doc):
-        bindings = PolicyTranslator.toGcpIamCond(doc, gcp_project="my-project")
+        bindings = PolicyTranslator.toGcpIamCond(doc, project_id="my-project")
         # prod/api/* should produce a binding with a condition
         conditioned = [b for b in bindings if "condition" in b]
         assert len(conditioned) >= 1
 
     def test_cel_condition_expression(self, doc):
-        bindings = PolicyTranslator.toGcpIamCond(doc, gcp_project="my-project")
+        bindings = PolicyTranslator.toGcpIamCond(doc, project_id="my-project")
         cels = [b["condition"]["expression"] for b in bindings if "condition" in b]
         assert any("startsWith" in cel for cel in cels)
 

@@ -1,7 +1,16 @@
-"""Azure Key Vault (Secrets plane) adapter via azure-keyvault-secrets + azure-identity."""
+"""Azure Key Vault (Secrets plane) adapter via azure-keyvault-secrets + azure-identity.
+
+Supports two authentication modes:
+  - ``'default'``            → :class:`~azure.identity.DefaultAzureCredential`
+                               (env vars, managed identity, CLI, VS Code…)
+  - ``'service_principal'``  → :class:`~azure.identity.ClientSecretCredential`
+                               reads AZURE_TENANT_ID / AZURE_CLIENT_ID /
+                               AZURE_CLIENT_SECRET from env if not passed explicitly.
+"""
 
 from __future__ import annotations
 
+import os
 import time
 from typing import Any
 
@@ -10,7 +19,10 @@ from azure.core.exceptions import (  # type: ignore[import-untyped]
     HttpResponseError,
     ResourceNotFoundError,
 )
-from azure.identity import DefaultAzureCredential  # type: ignore[import-untyped]
+from azure.identity import (  # type: ignore[import-untyped]
+    ClientSecretCredential,
+    DefaultAzureCredential,
+)
 from azure.keyvault.secrets import SecretClient  # type: ignore[import-untyped]
 
 from secretsmanager.interface import (
@@ -24,21 +36,49 @@ from secretsmanager.interface import (
 
 
 class AzureKeyVaultAdapter(SecretProvider):
-    """Adapter for Azure Key Vault (Secrets).
+    """Adapter for Azure Key Vault (Secrets plane).
 
     Args:
-        vault_url:   Key Vault URL, e.g. ``"https://myvault.vault.azure.net"``.
-        credential:  Azure credential.  Defaults to :class:`DefaultAzureCredential`.
+        vault_url:     Key Vault URL, e.g. ``"https://myvault.vault.azure.net"``.
+        auth_mode:     ``'default'`` (DefaultAzureCredential) or
+                       ``'service_principal'`` (ClientSecretCredential).
+        tenant_id:     Azure AD tenant ID (service_principal mode).
+                       Falls back to the ``AZURE_TENANT_ID`` environment variable.
+        client_id:     Application (client) ID (service_principal mode).
+                       Falls back to ``AZURE_CLIENT_ID``.
+        client_secret: Client secret value (service_principal mode).
+                       Falls back to ``AZURE_CLIENT_SECRET``.
+        credential:    Pass a custom credential object to bypass auth_mode logic.
     """
 
-    def __init__(self, vault_url: str, *, credential: Any = None) -> None:
-        cred = credential or DefaultAzureCredential()
+    def __init__(
+        self,
+        vault_url: str,
+        auth_mode: str = "default",
+        *,
+        tenant_id: str | None = None,
+        client_id: str | None = None,
+        client_secret: str | None = None,
+        credential: Any = None,
+    ) -> None:
+        if credential is not None:
+            cred = credential
+        elif auth_mode == "service_principal":
+            cred = ClientSecretCredential(
+                tenant_id=tenant_id or os.environ.get("AZURE_TENANT_ID", ""),
+                client_id=client_id or os.environ.get("AZURE_CLIENT_ID", ""),
+                client_secret=client_secret or os.environ.get("AZURE_CLIENT_SECRET", ""),
+            )
+        else:
+            cred = DefaultAzureCredential()
+
         self._client = SecretClient(vault_url=vault_url, credential=cred)
         self._vault_url = vault_url
+        self._auth_mode = auth_mode
 
     @property
     def backend_name(self) -> str:
-        return "azure"
+        return "azure_key_vault"
 
     # ------------------------------------------------------------------
     # Helpers
@@ -96,7 +136,7 @@ class AzureKeyVaultAdapter(SecretProvider):
             raise AccessDeniedError(str(exc), backend=self.backend_name, path=name) from exc
         except HttpResponseError as exc:
             self._check_http(exc, name)
-        return ""  # unreachable
+        return ""
 
     def delete_secret(self, name: str, *, force: bool = False) -> None:
         try:
@@ -124,7 +164,7 @@ class AzureKeyVaultAdapter(SecretProvider):
             raise AccessDeniedError(str(exc), backend=self.backend_name, path=prefix) from exc
         except HttpResponseError as exc:
             self._check_http(exc, prefix)
-        return []  # unreachable
+        return []
 
     def rotate_secret(self, name: str, *, policy: RotationPolicy | None = None) -> str:
         current = self.get_secret(name)
