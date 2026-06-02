@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+
+# Test & coverage
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.tox/
+
+# Ruff / mypy
+.ruff_cache/
+.mypy_cache/
+
+# Terraform
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+terraform/*.tfvars
+terraform/.ssh/
+!terraform/.ssh/.gitkeep
+
+# Secrets / keys
+*.pem
+*.key
+*.p12
+*.pfx
+.env
+.env.*
+.secrets.baseline
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+*.jsonl
+logs/
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,102 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: secrets-manager-app
+  namespace: secrets-manager
+  labels:
+    app: secrets-manager-app
+    version: "0.1.0"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: secrets-manager-app
+  template:
+    metadata:
+      labels:
+        app: secrets-manager-app
+      annotations:
+        # --------------- Vault Agent Injector annotations ---------------
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/role: "secrets-manager-app"
+        vault.hashicorp.com/agent-inject-status: "update"
+
+        # Inject the DB password into /vault/secrets/db-password
+        vault.hashicorp.com/agent-inject-secret-db-password: "secret/data/prod/db/password"
+        vault.hashicorp.com/agent-inject-template-db-password: |
+          {{- with secret "secret/data/prod/db/password" -}}
+          {{ .Data.data.value }}
+          {{- end }}
+
+        # Inject the API key
+        vault.hashicorp.com/agent-inject-secret-api-key: "secret/data/prod/api-key"
+        vault.hashicorp.com/agent-inject-template-api-key: |
+          {{- with secret "secret/data/prod/api-key" -}}
+          {{ .Data.data.value }}
+          {{- end }}
+
+        # Prometheus scrape
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+        # ----------------------------------------------------------------
+    spec:
+      serviceAccountName: secrets-manager-app
+      terminationGracePeriodSeconds: 30
+
+      containers:
+        - name: app
+          image: python:3.11-slim
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "secretsmanager"]
+          ports:
+            - name: metrics
+              containerPort: 9090
+          env:
+            - name: VAULT_ADDR
+              value: "http://vault.vault.svc.cluster.local:8200"
+            - name: SM_CACHE_TTL
+              value: "300"
+            - name: SM_LOG_LEVEL
+              value: "INFO"
+          volumeMounts:
+            - name: vault-secrets
+              mountPath: /vault/secrets
+              readOnly: true
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 9090
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 9090
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities:
+              drop: ["ALL"]
+
+      volumes:
+        - name: vault-secrets
+          emptyDir:
+            medium: Memory
+
+      securityContext:
+        fsGroup: 1000
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault

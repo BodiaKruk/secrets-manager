@@ -1,0 +1,38 @@
+# ClusterRoleBinding that allows Vault to verify Kubernetes service account tokens.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: vault-server-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+  - kind: ServiceAccount
+    name: vault
+    namespace: vault
+---
+# Role to allow the app SA to use the Vault injected secrets volume.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: secrets-manager-app-role
+  namespace: secrets-manager
+rules:
+  - apiGroups: [""]
+    resources: ["secrets", "configmaps"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: secrets-manager-app-rolebinding
+  namespace: secrets-manager
+subjects:
+  - kind: ServiceAccount
+    name: secrets-manager-app
+    namespace: secrets-manager
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: secrets-manager-app-role

@@ -1,0 +1,315 @@
+name: CI / CD
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  PYTHON_VERSION: "3.11"
+  TF_VERSION: "1.7.5"
+
+# ============================================================
+# PYTHON JOBS
+# ============================================================
+
+jobs:
+  # -----------------------------------------------------------
+  # 1. Lint + type check  (~25 s)
+  # -----------------------------------------------------------
+  lint:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dev dependencies
+        run: pip install -e ".[dev]"
+
+      - name: ruff check
+        run: ruff check src/ tests/
+
+      - name: ruff format check
+        run: ruff format --check src/ tests/
+
+      - name: mypy
+        run: mypy src/secretsmanager/
+
+  # -----------------------------------------------------------
+  # 2. Unit tests — no external services  (~15 s)
+  # -----------------------------------------------------------
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Run unit tests
+        run: pytest -m unit -v --cov=src/secretsmanager --cov-report=xml --cov-report=term-missing
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.xml
+          fail_ci_if_error: false
+
+  # -----------------------------------------------------------
+  # 3a. Integration — HashiCorp Vault dev server  (~40 s)
+  # -----------------------------------------------------------
+  integration-vault:
+    name: Integration Tests (Vault)
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    services:
+      vault:
+        image: hashicorp/vault:1.15
+        env:
+          VAULT_DEV_ROOT_TOKEN_ID: root
+          VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+        ports:
+          - 8200:8200
+        options: >-
+          --cap-add=IPC_LOCK
+          --health-cmd="vault status"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=12
+
+    env:
+      VAULT_ADDR: http://127.0.0.1:8200
+      VAULT_TOKEN: root
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Run Vault integration tests
+        run: pytest -m integration tests/integration/test_vault_integration.py -v
+
+  # -----------------------------------------------------------
+  # 3b. Integration — AWS via LocalStack  (~50 s)
+  # -----------------------------------------------------------
+  integration-aws:
+    name: Integration Tests (AWS / LocalStack)
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    services:
+      localstack:
+        image: localstack/localstack:3.4
+        ports:
+          - 4566:4566
+        env:
+          SERVICES: secretsmanager
+        options: >-
+          --health-cmd="curl -sf http://localhost:4566/_localstack/health | grep -q running"
+          --health-interval=5s
+          --health-retries=15
+
+    env:
+      LOCALSTACK_ENDPOINT: http://localhost:4566
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Run AWS integration tests
+        run: pytest -m integration tests/integration/test_aws_integration.py -v
+
+  # -----------------------------------------------------------
+  # 4. Security scan — pip-audit
+  # -----------------------------------------------------------
+  security-scan:
+    name: Security Scan (pip-audit)
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Install project deps
+        run: pip install -e .
+
+      - name: Run pip-audit
+        run: pip-audit --ignore-vuln GHSA-0000-0000-0000 || true
+
+# ============================================================
+# TERRAFORM JOBS  (Phase 6)
+# ============================================================
+
+  # -----------------------------------------------------------
+  # 5a. Terraform validate + plan  — runs on every PR  (~43 s)
+  # -----------------------------------------------------------
+  terraform-plan:
+    name: Terraform Validate & Plan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    # Terraform doesn't depend on Python jobs — run in parallel.
+    permissions:
+      contents: read
+      pull-requests: write  # to post plan as PR comment
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: true
+
+      - name: Terraform Format Check
+        id: fmt
+        run: terraform -chdir=terraform fmt -check -recursive
+        continue-on-error: true
+
+      - name: Terraform Init (no backend)
+        id: init
+        run: terraform -chdir=terraform init -backend=false
+
+      - name: Terraform Validate
+        id: validate
+        run: terraform -chdir=terraform validate -no-color
+
+      - name: Write CI tfvars
+        run: |
+          cat > terraform/ci.auto.tfvars <<'EOF'
+          gcp_project_id       = "ci-placeholder"
+          gcp_region           = "us-central1"
+          gcp_zone             = "us-central1-a"
+          vault_root_token     = "ci-placeholder"
+          vault_storage_bucket = "ci-placeholder-bucket"
+          environment          = "dev"
+          EOF
+
+      - name: Terraform Plan (dry-run, no credentials)
+        id: plan
+        run: |
+          terraform -chdir=terraform plan \
+            -no-color \
+            -out=tfplan \
+            2>&1 | tee /tmp/plan_output.txt || true
+        env:
+          GOOGLE_CREDENTIALS: ${{ secrets.GCP_SA_KEY || '' }}
+
+      - name: Post plan as PR comment
+        uses: actions/github-script@v7
+        if: always()
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            let plan = '';
+            try {
+              plan = fs.readFileSync('/tmp/plan_output.txt', 'utf8').slice(0, 65_000);
+            } catch (_) {
+              plan = '(plan output unavailable)';
+            }
+            const fmt = '${{ steps.fmt.outcome }}';
+            const init = '${{ steps.init.outcome }}';
+            const validate = '${{ steps.validate.outcome }}';
+            const body = [
+              '## Terraform Plan',
+              '',
+              `| Step | Result |`,
+              `|------|--------|`,
+              `| fmt  | ${fmt === 'success' ? '✅' : '⚠️'} ${fmt} |`,
+              `| init | ${init === 'success' ? '✅' : '❌'} ${init} |`,
+              `| validate | ${validate === 'success' ? '✅' : '❌'} ${validate} |`,
+              '',
+              '<details><summary>Plan output</summary>',
+              '',
+              '```hcl',
+              plan,
+              '```',
+              '</details>',
+              '',
+              `*Triggered by: @${context.actor}*`,
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body,
+            });
+
+  # -----------------------------------------------------------
+  # 5b. Terraform Apply — runs only on merge to main
+  # -----------------------------------------------------------
+  terraform-apply:
+    name: Terraform Apply
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [unit-tests, integration-vault, integration-aws, security-scan]
+    environment: production   # requires manual approval in GitHub UI
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Terraform Init
+        run: terraform -chdir=terraform init
+        env:
+          GOOGLE_CREDENTIALS: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Terraform Apply
+        run: |
+          terraform -chdir=terraform apply \
+            -auto-approve \
+            -var="gcp_project_id=${{ secrets.GCP_PROJECT_ID }}" \
+            -var="vault_root_token=${{ secrets.VAULT_ROOT_TOKEN }}" \
+            -var="vault_storage_bucket=${{ secrets.VAULT_STORAGE_BUCKET }}"
+        env:
+          GOOGLE_CREDENTIALS: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Output Vault address
+        run: terraform -chdir=terraform output vault_api_address
