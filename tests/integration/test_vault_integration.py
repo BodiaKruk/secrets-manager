@@ -78,20 +78,35 @@ def test_vault_cache_integration(vault):
     sv1 = cached.get_secret("integration/cached-key")
     sv2 = cached.get_secret("integration/cached-key")
     assert sv1.value == sv2.value == "cached-value"
-    stats = cached.cache_stats
+    stats = cached.cache_stats()
     assert stats["alive_entries"] >= 1
 
 
 @pytest.mark.integration
 def test_vault_audit_records_event(vault, tmp_path):
+    import json
+    import time
     from secretsmanager.audit import AuditLogger
 
     log = tmp_path / "audit.jsonl"
-    logger = AuditLogger(log_file=log, actor="integration-test")
-    with logger.record("get_secret", path="integration/test-key", backend="hashicorp"):
-        vault.get_secret("integration/test-key")
+    logger = AuditLogger(max_buffer_size=100, export_path=log)
 
-    import json
-    events = [json.loads(l) for l in log.read_text().splitlines()]
-    assert events[0]["status"] == "success"
-    assert events[0]["operation"] == "get_secret"
+    t0 = time.perf_counter()
+    sv = vault.get_secret("integration/test-key")
+    duration_ms = (time.perf_counter() - t0) * 1000
+
+    logger.log(
+        client_id="integration-test",
+        secret_name="integration/test-key",
+        operation="get_secret",
+        result=AuditLogger.SUCCESS,
+        backend="hashicorp",
+        duration_ms=duration_ms,
+        version=sv.version,
+    )
+
+    logger.export_to_file()
+    records = [json.loads(line) for line in log.read_text().splitlines()]
+    assert records[0]["result"] == "success"
+    assert records[0]["operation"] == "get_secret"
+    assert records[0]["backend"] == "hashicorp"

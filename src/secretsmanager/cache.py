@@ -120,7 +120,13 @@ class CachedSecretProvider(SecretProvider):
         return (name, version or "")
 
     def _effective_ttl(self, secret: SecretValue) -> float:
-        """For dynamic secrets respect the provider's lease duration."""
+        """Effective cache TTL for a secret.
+
+        For dynamic secrets (Vault DB leases) the cache must not outlive
+        the lease itself.  We cap at 90 % of the remaining lease time so
+        there is a safety margin before the credential expires.
+        This matches §2.4 and §4.7 of the thesis (90 % rule).
+        """
         if secret.is_dynamic and secret.expires_at is not None:
             lease_remaining = secret.expires_at - time.time()
             return min(self._ttl, lease_remaining * 0.9)

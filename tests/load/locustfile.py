@@ -1,15 +1,16 @@
-"""Locust load test for the secrets manager HTTP metrics endpoint and direct adapter.
+"""Locust load test for the secrets manager — direct adapter vs in-memory cache.
 
 This file models the read-path latency under concurrent load to produce
-the p50/p95/p99 figures used in section 4.3 of the thesis.
+the p50/p95/p99 figures used in section 4.4 of the thesis.
 
-Run:
+Run (matches §4.4 parameters — 500 users, ramp 50/s, 60 s):
   locust -f tests/load/locustfile.py --host=http://127.0.0.1:8200 \
-         --users=50 --spawn-rate=10 --run-time=60s --headless
+         --users=500 --spawn-rate=50 --run-time=60s --headless \
+         --csv=results/load
 
 Environment variables:
-  VAULT_ADDR   — Vault URL (default http://127.0.0.1:8200)
-  VAULT_TOKEN  — Vault root token (default root)
+  VAULT_ADDR     — Vault URL (default http://127.0.0.1:8200)
+  VAULT_TOKEN    — Vault root token (default root)
   SM_SECRET_PATH — path to benchmark secret (default load/benchmark-key)
 """
 
@@ -58,7 +59,7 @@ class VaultDirectUser(User):
         from secretsmanager.adapters.hashicorp import HashiCorpVaultAdapter
 
         self._adapter = HashiCorpVaultAdapter(
-            url=VAULT_ADDR, token=VAULT_TOKEN, verify_ssl=False
+            vault_url=VAULT_ADDR, vault_token=VAULT_TOKEN, verify_ssl=False
         )
 
     @task(3)
@@ -99,7 +100,7 @@ class VaultDirectUser(User):
 
 
 class CachedVaultUser(User):
-    """Simulates a pod reading secrets via the in-memory cache (TTL=60s).
+    """Simulates a pod reading secrets via the in-memory cache (TTL=300s, §4.1 table).
 
     Models steady-state production traffic where cache hit rate is high.
     """
@@ -111,7 +112,7 @@ class CachedVaultUser(User):
         from secretsmanager.cache import CachedSecretProvider
 
         raw = HashiCorpVaultAdapter(vault_url=VAULT_ADDR, vault_token=VAULT_TOKEN, verify_ssl=False)
-        self._adapter = CachedSecretProvider(raw, ttl=60)
+        self._adapter = CachedSecretProvider(raw, ttl_seconds=300)
 
     @task
     def read_cached_secret(self) -> None:

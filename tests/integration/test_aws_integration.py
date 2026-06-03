@@ -36,7 +36,7 @@ def test_aws_create_and_read(aws):
     aws.set_secret("integration/aws-key", "aws-secret-value")
     sv = aws.get_secret("integration/aws-key")
     assert sv.value == "aws-secret-value"
-    assert sv.backend == "aws"
+    assert sv.backend == "aws_secrets_manager"
 
 
 @pytest.mark.integration
