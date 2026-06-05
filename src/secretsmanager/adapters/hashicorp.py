@@ -17,10 +17,10 @@ import hvac.exceptions  # type: ignore[import-untyped]
 from secretsmanager.interface import (
     AccessDeniedError,
     BackendUnavailableError,
+    RotationPolicy,
     SecretNotFoundError,
     SecretProvider,
     SecretValue,
-    RotationPolicy,
 )
 
 
@@ -85,14 +85,14 @@ class HashiCorpVaultAdapter(SecretProvider):
             kw["version"] = int(version)
         try:
             resp = self._client.secrets.kv.v2.read_secret_version(**kw)
-        except hvac.exceptions.InvalidPath:
+        except hvac.exceptions.InvalidPath as exc:
             raise SecretNotFoundError(
                 f"Secret not found: {name}", backend=self.backend_name, path=name
-            )
-        except hvac.exceptions.Forbidden:
+            ) from exc
+        except hvac.exceptions.Forbidden as exc:
             raise AccessDeniedError(
                 f"Access denied: {name}", backend=self.backend_name, path=name
-            )
+            ) from exc
         except Exception as exc:
             raise self._backend_err(exc, name) from exc
 
@@ -131,17 +131,15 @@ class HashiCorpVaultAdapter(SecretProvider):
         """
         mount = kwargs.get("mount_point", self._db_mount)
         try:
-            resp = self._client.secrets.database.generate_credentials(
-                name=role, mount_point=mount
-            )
-        except hvac.exceptions.InvalidPath:
+            resp = self._client.secrets.database.generate_credentials(name=role, mount_point=mount)
+        except hvac.exceptions.InvalidPath as exc:
             raise SecretNotFoundError(
                 f"Database role not found: {role}", backend=self.backend_name, path=role
-            )
-        except hvac.exceptions.Forbidden:
+            ) from exc
+        except hvac.exceptions.Forbidden as exc:
             raise AccessDeniedError(
                 f"Access denied for DB role: {role}", backend=self.backend_name, path=role
-            )
+            ) from exc
         except Exception as exc:
             raise self._backend_err(exc, role) from exc
 
@@ -170,19 +168,17 @@ class HashiCorpVaultAdapter(SecretProvider):
     # Write / delete
     # ------------------------------------------------------------------
 
-    def set_secret(
-        self, name: str, value: str, *, metadata: dict[str, Any] | None = None
-    ) -> str:
+    def set_secret(self, name: str, value: str, *, metadata: dict[str, Any] | None = None) -> str:
         try:
             resp = self._client.secrets.kv.v2.create_or_update_secret(
                 path=name,
                 secret={"value": value},
                 mount_point=self._mount,
             )
-        except hvac.exceptions.Forbidden:
+        except hvac.exceptions.Forbidden as exc:
             raise AccessDeniedError(
                 f"Access denied: {name}", backend=self.backend_name, path=name
-            )
+            ) from exc
         except Exception as exc:
             raise self._backend_err(exc, name) from exc
         return str(resp["data"]["version"])
@@ -197,14 +193,14 @@ class HashiCorpVaultAdapter(SecretProvider):
                 self._client.secrets.kv.v2.delete_latest_version_of_secret(
                     path=name, mount_point=self._mount
                 )
-        except hvac.exceptions.InvalidPath:
+        except hvac.exceptions.InvalidPath as exc:
             raise SecretNotFoundError(
                 f"Secret not found: {name}", backend=self.backend_name, path=name
-            )
-        except hvac.exceptions.Forbidden:
+            ) from exc
+        except hvac.exceptions.Forbidden as exc:
             raise AccessDeniedError(
                 f"Access denied: {name}", backend=self.backend_name, path=name
-            )
+            ) from exc
         except Exception as exc:
             raise self._backend_err(exc, name) from exc
 
@@ -214,15 +210,13 @@ class HashiCorpVaultAdapter(SecretProvider):
 
     def list_secrets(self, prefix: str = "") -> list[str]:
         try:
-            resp = self._client.secrets.kv.v2.list_secrets(
-                path=prefix, mount_point=self._mount
-            )
+            resp = self._client.secrets.kv.v2.list_secrets(path=prefix, mount_point=self._mount)
         except hvac.exceptions.InvalidPath:
             return []
-        except hvac.exceptions.Forbidden:
+        except hvac.exceptions.Forbidden as exc:
             raise AccessDeniedError(
                 f"Access denied listing: {prefix}", backend=self.backend_name, path=prefix
-            )
+            ) from exc
         except Exception as exc:
             raise self._backend_err(exc, prefix) from exc
 

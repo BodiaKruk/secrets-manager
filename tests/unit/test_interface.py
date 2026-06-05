@@ -19,7 +19,6 @@ from secretsmanager.interface import (
     SecretValue,
 )
 
-
 # ===========================================================================
 # SecretValue
 # ===========================================================================
@@ -103,8 +102,11 @@ class TestSecretValue:
 
     def test_dynamic_repr_shows_ttl(self):
         sv = SecretValue(
-            value="x", version="1", backend="b",
-            expires_at=time.time() + 3600, is_dynamic=True,
+            value="x",
+            version="1",
+            backend="b",
+            expires_at=time.time() + 3600,
+            is_dynamic=True,
         )
         r = repr(sv)
         assert "dynamic" in r
@@ -179,8 +181,10 @@ class TestSecretProviderABC:
             @property
             def backend_name(self) -> str:
                 return "test"
+
             def get_secret(self, name, *, version=None):  # type: ignore[override]
                 return SecretValue(value="v", version="1", backend="test")
+
             # Missing get_dynamic_secret, list_secrets, health_check
 
         with pytest.raises(TypeError):
@@ -191,12 +195,16 @@ class TestSecretProviderABC:
             @property
             def backend_name(self) -> str:
                 return "test"
+
             def get_secret(self, name, *, version=None):  # type: ignore[override]
                 return SecretValue(value="v", version="1", backend="test")
+
             def get_dynamic_secret(self, role, **kwargs):  # type: ignore[override]
                 raise NotImplementedError
+
             def list_secrets(self, prefix=""):  # type: ignore[override]
                 return []
+
             def health_check(self) -> bool:  # type: ignore[override]
                 return True
 

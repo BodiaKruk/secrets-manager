@@ -54,15 +54,11 @@ spec:
               containerPort: 9090
           env:
             - name: VAULT_ADDR
-              value: "http://vault.vault.svc.cluster.local:8200"
+              value: "http://vault.default.svc.cluster.local:8200"
             - name: SM_CACHE_TTL
               value: "300"
             - name: SM_LOG_LEVEL
               value: "INFO"
-          volumeMounts:
-            - name: vault-secrets
-              mountPath: /vault/secrets
-              readOnly: true
           resources:
             requests:
               cpu: "100m"
@@ -89,11 +85,6 @@ spec:
             runAsUser: 1000
             capabilities:
               drop: ["ALL"]
-
-      volumes:
-        - name: vault-secrets
-          emptyDir:
-            medium: Memory
 
       securityContext:
         fsGroup: 1000

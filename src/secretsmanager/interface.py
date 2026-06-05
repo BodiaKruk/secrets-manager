@@ -34,7 +34,6 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-
 # ---------------------------------------------------------------------------
 # Domain exceptions
 # ---------------------------------------------------------------------------
@@ -134,7 +133,7 @@ class SecretValue:
             return None
         return self.expires_at - time.time()
 
-    def as_fallback(self) -> "SecretValue":
+    def as_fallback(self) -> SecretValue:
         """Return a copy of this value with is_fallback=True."""
         # frozen=True means we must use object.__setattr__ via a new instance.
         return SecretValue(
@@ -268,9 +267,7 @@ class SecretProvider(ABC):
     # Optional overrides
     # ------------------------------------------------------------------
 
-    def set_secret(
-        self, name: str, value: str, *, metadata: dict[str, Any] | None = None
-    ) -> str:
+    def set_secret(self, name: str, value: str, *, metadata: dict[str, Any] | None = None) -> str:
         """Create or update a secret.  Returns new version identifier."""
         raise NotImplementedError(f"{self.backend_name} does not support set_secret")
 

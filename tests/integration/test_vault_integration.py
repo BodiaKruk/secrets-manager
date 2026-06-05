@@ -86,6 +86,7 @@ def test_vault_cache_integration(vault):
 def test_vault_audit_records_event(vault, tmp_path):
     import json
     import time
+
     from secretsmanager.audit import AuditLogger
 
     log = tmp_path / "audit.jsonl"

@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from secretsmanager.audit import AuditLogger
@@ -29,7 +29,6 @@ from secretsmanager.interface import (
     AccessDeniedError,
     BackendUnavailableError,
     RotationPolicy,
-    SecretNotFoundError,
     SecretProvider,
     SecretValue,
 )
@@ -65,7 +64,7 @@ except ImportError:  # pragma: no cover
 @dataclass(slots=True)
 class _Entry:
     secret: SecretValue
-    cache_expires: float   # time.monotonic() deadline for the cache entry
+    cache_expires: float  # time.monotonic() deadline for the cache entry
     hits: int = 0
 
 
@@ -355,9 +354,7 @@ class CachedSecretProvider(SecretProvider):
     # Optional overrides
     # ------------------------------------------------------------------
 
-    def set_secret(
-        self, name: str, value: str, *, metadata: dict[str, Any] | None = None
-    ) -> str:
+    def set_secret(self, name: str, value: str, *, metadata: dict[str, Any] | None = None) -> str:
         version = self._primary.set_secret(name, value, metadata=metadata)
         self.invalidate(name)
         return version

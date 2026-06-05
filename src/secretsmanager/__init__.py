@@ -14,23 +14,23 @@ Public API::
     )
 """
 
+from secretsmanager.audit import AuditLogger, AuditRecord
+from secretsmanager.cache import CachedSecretProvider
 from secretsmanager.interface import (
-    # Core
-    SecretProvider,
-    SecretValue,
-    RotationPolicy,
-    RotationSchedule,
-    # Exceptions (canonical names)
-    SecretError,
-    SecretNotFoundError,
     AccessDeniedError,
     BackendUnavailableError,
+    RotationPolicy,
+    RotationSchedule,
     # Backward-compatible aliases
     SecretAccessDeniedError,
     SecretBackendError,
+    # Exceptions (canonical names)
+    SecretError,
+    SecretNotFoundError,
+    # Core
+    SecretProvider,
+    SecretValue,
 )
-from secretsmanager.cache import CachedSecretProvider
-from secretsmanager.audit import AuditLogger, AuditRecord
 from secretsmanager.policy import PolicyTranslator
 
 __all__ = [
@@ -45,7 +45,7 @@ __all__ = [
     "AccessDeniedError",
     "BackendUnavailableError",
     "SecretAccessDeniedError",  # alias
-    "SecretBackendError",       # alias
+    "SecretBackendError",  # alias
     # Components
     "CachedSecretProvider",
     "AuditLogger",

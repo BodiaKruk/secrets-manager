@@ -11,7 +11,6 @@ Supports two authentication modes:
 from __future__ import annotations
 
 import os
-import time
 from typing import Any
 
 from azure.core.exceptions import (  # type: ignore[import-untyped]
@@ -28,10 +27,10 @@ from azure.keyvault.secrets import SecretClient  # type: ignore[import-untyped]
 from secretsmanager.interface import (
     AccessDeniedError,
     BackendUnavailableError,
+    RotationPolicy,
     SecretNotFoundError,
     SecretProvider,
     SecretValue,
-    RotationPolicy,
 )
 
 
@@ -99,10 +98,10 @@ class AzureKeyVaultAdapter(SecretProvider):
     def get_secret(self, name: str, *, version: str | None = None) -> SecretValue:
         try:
             resp = self._client.get_secret(name, version=version)
-        except ResourceNotFoundError:
+        except ResourceNotFoundError as exc:
             raise SecretNotFoundError(
                 f"Secret not found: {name}", backend=self.backend_name, path=name
-            )
+            ) from exc
         except ClientAuthenticationError as exc:
             raise AccessDeniedError(str(exc), backend=self.backend_name, path=name) from exc
         except HttpResponseError as exc:
@@ -125,9 +124,7 @@ class AzureKeyVaultAdapter(SecretProvider):
             "Use Azure Managed Identity or service principal credentials instead."
         )
 
-    def set_secret(
-        self, name: str, value: str, *, metadata: dict[str, Any] | None = None
-    ) -> str:
+    def set_secret(self, name: str, value: str, *, metadata: dict[str, Any] | None = None) -> str:
         tags = {str(k): str(v) for k, v in (metadata or {}).items()}
         try:
             resp = self._client.set_secret(name, value, tags=tags or None)
@@ -144,10 +141,10 @@ class AzureKeyVaultAdapter(SecretProvider):
             poller.wait()
             if force:
                 self._client.purge_deleted_secret(name)
-        except ResourceNotFoundError:
+        except ResourceNotFoundError as exc:
             raise SecretNotFoundError(
                 f"Secret not found: {name}", backend=self.backend_name, path=name
-            )
+            ) from exc
         except ClientAuthenticationError as exc:
             raise AccessDeniedError(str(exc), backend=self.backend_name, path=name) from exc
         except HttpResponseError as exc:

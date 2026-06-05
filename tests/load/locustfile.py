@@ -30,12 +30,15 @@ SECRET_PATH = os.getenv("SM_SECRET_PATH", "load/benchmark-key")
 # Setup: ensure the benchmark secret exists before any test starts.
 # ---------------------------------------------------------------------------
 
+
 @events.test_start.add_listener
 def seed_secret(environment, **kwargs):  # type: ignore[misc]
     try:
         from secretsmanager.adapters.hashicorp import HashiCorpVaultAdapter
 
-        adapter = HashiCorpVaultAdapter(vault_url=VAULT_ADDR, vault_token=VAULT_TOKEN, verify_ssl=False)
+        adapter = HashiCorpVaultAdapter(
+            vault_url=VAULT_ADDR, vault_token=VAULT_TOKEN, verify_ssl=False
+        )
         adapter.set_secret(SECRET_PATH, "benchmark-value-xyz")
         print(f"[locust] Seeded secret at {SECRET_PATH}")
     except Exception as exc:
