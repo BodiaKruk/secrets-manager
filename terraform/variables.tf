@@ -32,8 +32,8 @@ variable "machine_type" {
 }
 
 variable "allowed_ssh_cidr" {
-  type    = string
-  default = "0.0.0.0/0"
+  type        = string
+  default     = "0.0.0.0/0"
   description = "CIDR block allowed to SSH into the Vault instance."
 }
 

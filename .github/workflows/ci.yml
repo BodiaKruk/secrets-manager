@@ -118,15 +118,17 @@ jobs:
     needs: unit-tests
     services:
       localstack:
-        image: localstack/localstack:3.4
+        image: localstack/localstack:3.5
         ports:
           - 4566:4566
         env:
           SERVICES: secretsmanager
+          DISABLE_SSL: "1"
         options: >-
-          --health-cmd="curl -sf http://localhost:4566/_localstack/health | grep -q running"
+          --health-cmd="curl -sf http://localhost:4566/_localstack/health"
           --health-interval=5s
-          --health-retries=15
+          --health-timeout=10s
+          --health-retries=20
 
     env:
       LOCALSTACK_ENDPOINT: http://localhost:4566

@@ -51,9 +51,9 @@ resource "google_compute_instance" "vault" {
   metadata_startup_script = templatefile(
     "${path.module}/vault.hcl.tpl",
     {
-      vault_version        = var.vault_version
-      storage_bucket       = var.vault_storage_bucket
-      gcp_project_id       = var.gcp_project_id
+      vault_version  = var.vault_version
+      storage_bucket = var.vault_storage_bucket
+      gcp_project_id = var.gcp_project_id
     }
   )
 
