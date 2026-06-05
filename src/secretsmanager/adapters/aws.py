@@ -120,8 +120,8 @@ class AwsSecretsManagerAdapter(SecretProvider):
             kw: dict[str, Any] = {"Name": name, "SecretString": value}
             if tags:
                 kw["Tags"] = tags
-            resp = self._client.create_secret(**kw)
-            return resp["VersionId"]
+            create_resp = self._client.create_secret(**kw)
+            return create_resp["VersionId"]
         except (AccessDeniedError, BackendUnavailableError, SecretNotFoundError):
             raise
         except Exception as exc:
@@ -143,7 +143,7 @@ class AwsSecretsManagerAdapter(SecretProvider):
         try:
             names = [
                 s["Name"]
-                for page in paginator.paginate(Filters=filters)
+                for page in paginator.paginate(Filters=filters)  # type: ignore[arg-type]
                 for s in page.get("SecretList", [])
             ]
             return sorted(names)
