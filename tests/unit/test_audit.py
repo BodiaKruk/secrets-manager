@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import json
 import time
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 
 import pytest
 
 from secretsmanager.audit import AuditLogger, AuditRecord
-from secretsmanager.interface import BackendUnavailableError
 
 
 @pytest.fixture()
@@ -48,6 +47,7 @@ class TestAuditLoggerWrite:
 
     def test_event_id_is_uuid(self, logger):
         import uuid
+
         rec = _log(logger)
         uuid.UUID(rec.event_id)  # raises if not valid UUID
 
@@ -102,14 +102,38 @@ class TestAuditLoggerWrite:
 @pytest.mark.unit
 class TestAuditLoggerQuery:
     def _seed(self, logger: AuditLogger) -> None:
-        _log(logger, secret_name="prod/db", operation="get_secret",
-             result="hit", backend="hashicorp", duration_ms=1.0)
-        _log(logger, secret_name="prod/db", operation="get_secret",
-             result="miss", backend="hashicorp", duration_ms=10.0)
-        _log(logger, secret_name="dev/api", operation="set_secret",
-             result="success", backend="aws", duration_ms=30.0)
-        _log(logger, secret_name="dev/api", operation="get_secret",
-             result="error", backend="aws", duration_ms=5.0)
+        _log(
+            logger,
+            secret_name="prod/db",
+            operation="get_secret",
+            result="hit",
+            backend="hashicorp",
+            duration_ms=1.0,
+        )
+        _log(
+            logger,
+            secret_name="prod/db",
+            operation="get_secret",
+            result="miss",
+            backend="hashicorp",
+            duration_ms=10.0,
+        )
+        _log(
+            logger,
+            secret_name="dev/api",
+            operation="set_secret",
+            result="success",
+            backend="aws",
+            duration_ms=30.0,
+        )
+        _log(
+            logger,
+            secret_name="dev/api",
+            operation="get_secret",
+            result="error",
+            backend="aws",
+            duration_ms=5.0,
+        )
 
     def test_query_all(self, logger):
         self._seed(logger)

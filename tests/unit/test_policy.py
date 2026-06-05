@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import json
-
 import pytest
 
 from secretsmanager.policy import PolicyTranslator
-
 
 SAMPLE_YAML = """
 version: "1.0"
@@ -78,23 +75,29 @@ class TestLoadAndValidate:
 
     def test_validate_missing_path_raises(self):
         with pytest.raises(ValueError, match="path"):
-            PolicyTranslator.validate_yaml({"rules": [{"capabilities": ["read"], "principals": []}]})
+            PolicyTranslator.validate_yaml(
+                {"rules": [{"capabilities": ["read"], "principals": []}]}
+            )
 
     def test_validate_unknown_cap_raises(self):
         with pytest.raises(ValueError, match="unknown values"):
-            PolicyTranslator.validate_yaml({
-                "rules": [{"path": "x", "capabilities": ["teleport"], "principals": []}]
-            })
+            PolicyTranslator.validate_yaml(
+                {"rules": [{"path": "x", "capabilities": ["teleport"], "principals": []}]}
+            )
 
     def test_validate_bad_principal_type_raises(self):
         with pytest.raises(ValueError, match="unknown"):
-            PolicyTranslator.validate_yaml({
-                "rules": [{
-                    "path": "x",
-                    "capabilities": ["read"],
-                    "principals": [{"type": "ghost", "id": "x"}],
-                }]
-            })
+            PolicyTranslator.validate_yaml(
+                {
+                    "rules": [
+                        {
+                            "path": "x",
+                            "capabilities": ["read"],
+                            "principals": [{"type": "ghost", "id": "x"}],
+                        }
+                    ]
+                }
+            )
 
 
 @pytest.mark.unit

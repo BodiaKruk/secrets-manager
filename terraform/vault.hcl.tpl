@@ -17,14 +17,18 @@ useradd --system --home /etc/vault.d --shell /bin/false vault || true
 mkdir -p /etc/vault.d /var/log/vault /opt/vault/data
 chown -R vault:vault /etc/vault.d /var/log/vault /opt/vault
 
+# Resolve IPs before writing config (heredoc must NOT be single-quoted)
+INTERNAL_IP=$(hostname -I | awk '{print $1}')
+EXTERNAL_IP=$(curl -s http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/external-ip -H 'Metadata-Flavor: Google')
+
 # Write Vault configuration
-cat > /etc/vault.d/vault.hcl <<'CONFIG'
+cat > /etc/vault.d/vault.hcl <<CONFIG
 ui            = true
 disable_mlock = true
 
 listener "tcp" {
   address     = "0.0.0.0:8200"
-  tls_disable = true   # TLS terminated at load-balancer in production
+  tls_disable = true
 }
 
 storage "raft" {
@@ -32,16 +36,8 @@ storage "raft" {
   node_id = "vault-node-1"
 }
 
-# Snapshot storage
-seal "gcpckms" {
-  project    = "${gcp_project_id}"
-  region     = "global"
-  key_ring   = "vault-unseal"
-  crypto_key = "vault-unseal-key"
-}
-
-api_addr     = "http://$(curl -s http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/external-ip -H 'Metadata-Flavor: Google'):8200"
-cluster_addr = "http://$(hostname -I | awk '{print $1}'):8201"
+api_addr     = "http://$${EXTERNAL_IP}:8200"
+cluster_addr = "http://$${INTERNAL_IP}:8201"
 
 telemetry {
   prometheus_retention_time = "30s"

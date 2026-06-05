@@ -29,7 +29,7 @@ resource "google_compute_firewall" "allow_ssh" {
   target_tags   = ["vault-server"]
 }
 
-# Firewall — allow Vault API from within the VPC
+# Firewall — allow Vault API from VPC and operator CIDR (Terraform runner)
 resource "google_compute_firewall" "allow_vault_api" {
   name    = "vault-allow-api-${var.environment}"
   network = google_compute_network.vault_vpc.name
@@ -38,7 +38,7 @@ resource "google_compute_firewall" "allow_vault_api" {
     protocol = "tcp"
     ports    = ["8200", "8201"]
   }
-  source_ranges = ["10.10.0.0/24"]
+  source_ranges = ["10.10.0.0/24", var.allowed_ssh_cidr]
   target_tags   = ["vault-server"]
 }
 

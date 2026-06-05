@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from unittest.mock import MagicMock, call
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -13,7 +13,6 @@ from secretsmanager.interface import (
     AccessDeniedError,
     BackendUnavailableError,
     SecretNotFoundError,
-    SecretValue,
 )
 from tests.conftest import make_secret
 
@@ -105,8 +104,10 @@ class TestCacheInvalidation:
 
     def test_invalidate_all(self, cached, primary):
         primary.get_secret.side_effect = [
-            make_secret(path="a"), make_secret(path="b"),
-            make_secret(path="a"), make_secret(path="b"),
+            make_secret(path="a"),
+            make_secret(path="b"),
+            make_secret(path="a"),
+            make_secret(path="b"),
         ]
         cached.get_secret("a")
         cached.get_secret("b")
@@ -203,9 +204,7 @@ class TestDynamicSecretTTL:
     def test_dynamic_secret_cached_with_lease_ttl(self, primary):
         """Effective TTL should be min(ttl_seconds, lease*0.9)."""
         # lease=100s, ttl=300s → effective = 100*0.9 = 90s
-        primary.get_dynamic_secret.return_value = make_secret(
-            is_dynamic=True, lease_seconds=100
-        )
+        primary.get_dynamic_secret.return_value = make_secret(is_dynamic=True, lease_seconds=100)
         c = CachedSecretProvider(primary, ttl_seconds=300)
         c.get_dynamic_secret("db-role")
         c.get_dynamic_secret("db-role")
@@ -214,7 +213,8 @@ class TestDynamicSecretTTL:
     def test_dynamic_secret_ttl_capped_by_config(self, primary):
         """When ttl_seconds < lease*0.9, use ttl_seconds."""
         primary.get_dynamic_secret.return_value = make_secret(
-            is_dynamic=True, lease_seconds=7200  # 7200*0.9=6480 > 300
+            is_dynamic=True,
+            lease_seconds=7200,  # 7200*0.9=6480 > 300
         )
         c = CachedSecretProvider(primary, ttl_seconds=300)
         c.get_dynamic_secret("db-role")

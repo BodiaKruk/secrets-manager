@@ -9,13 +9,9 @@ import pytest
 
 from secretsmanager.audit import AuditLogger
 from secretsmanager.interface import (
-    AccessDeniedError,
-    BackendUnavailableError,
-    SecretNotFoundError,
     SecretProvider,
     SecretValue,
 )
-
 
 # ---------------------------------------------------------------------------
 # SecretValue factory helpers

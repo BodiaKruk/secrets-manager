@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import time
 from typing import Any
 
 from google.api_core.exceptions import (  # type: ignore[import-untyped]
@@ -15,10 +14,10 @@ from google.cloud import secretmanager  # type: ignore[import-untyped]
 from secretsmanager.interface import (
     AccessDeniedError,
     BackendUnavailableError,
+    RotationPolicy,
     SecretNotFoundError,
     SecretProvider,
     SecretValue,
-    RotationPolicy,
 )
 
 
@@ -59,14 +58,14 @@ class GoogleSecretManagerAdapter(SecretProvider):
         fqn = self._version_fqn(name, version)
         try:
             resp = self._client.access_secret_version(request={"name": fqn})
-        except NotFound:
+        except NotFound as exc:
             raise SecretNotFoundError(
                 f"Secret not found: {name}", backend=self.backend_name, path=name
-            )
-        except PermissionDenied:
+            ) from exc
+        except PermissionDenied as exc:
             raise AccessDeniedError(
                 f"Access denied: {name}", backend=self.backend_name, path=name
-            )
+            ) from exc
         except GoogleAPICallError as exc:
             raise self._wrap(exc, name) from exc
 
@@ -87,9 +86,7 @@ class GoogleSecretManagerAdapter(SecretProvider):
             "Use Workload Identity + service account impersonation instead."
         )
 
-    def set_secret(
-        self, name: str, value: str, *, metadata: dict[str, Any] | None = None
-    ) -> str:
+    def set_secret(self, name: str, value: str, *, metadata: dict[str, Any] | None = None) -> str:
         parent = f"projects/{self._project}"
         fqn = self._secret_fqn(name)
         try:
@@ -118,10 +115,10 @@ class GoogleSecretManagerAdapter(SecretProvider):
     def delete_secret(self, name: str, *, force: bool = False) -> None:
         try:
             self._client.delete_secret(request={"name": self._secret_fqn(name)})
-        except NotFound:
+        except NotFound as exc:
             raise SecretNotFoundError(
                 f"Secret not found: {name}", backend=self.backend_name, path=name
-            )
+            ) from exc
         except PermissionDenied as exc:
             raise AccessDeniedError(str(exc), backend=self.backend_name, path=name) from exc
         except GoogleAPICallError as exc:

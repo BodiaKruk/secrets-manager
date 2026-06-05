@@ -34,12 +34,10 @@ Usage::
 
 from __future__ import annotations
 
-import json
 import re
 from typing import Any
 
 import yaml
-
 
 # ---------------------------------------------------------------------------
 # Supported values
@@ -48,30 +46,33 @@ import yaml
 _VALID_CAPS = frozenset({"read", "write", "delete", "list", "rotate", "create", "update"})
 
 _VAULT_CAPS_MAP: dict[str, list[str]] = {
-    "read":   ["read"],
-    "write":  ["create", "update"],
+    "read": ["read"],
+    "write": ["create", "update"],
     "delete": ["delete"],
-    "list":   ["list"],
+    "list": ["list"],
     "rotate": ["create", "update"],
     "create": ["create"],
     "update": ["update"],
 }
 
 _AWS_ACTIONS_MAP: dict[str, list[str]] = {
-    "read":   ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"],
-    "write":  ["secretsmanager:PutSecretValue", "secretsmanager:CreateSecret",
-               "secretsmanager:UpdateSecret"],
+    "read": ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"],
+    "write": [
+        "secretsmanager:PutSecretValue",
+        "secretsmanager:CreateSecret",
+        "secretsmanager:UpdateSecret",
+    ],
     "delete": ["secretsmanager:DeleteSecret"],
-    "list":   ["secretsmanager:ListSecrets", "secretsmanager:ListSecretVersionIds"],
+    "list": ["secretsmanager:ListSecrets", "secretsmanager:ListSecretVersionIds"],
     "rotate": ["secretsmanager:RotateSecret"],
     "create": ["secretsmanager:CreateSecret"],
     "update": ["secretsmanager:PutSecretValue", "secretsmanager:UpdateSecret"],
 }
 
 _GCP_ROLE_MAP: dict[str, str] = {
-    "read":   "roles/secretmanager.secretAccessor",
-    "list":   "roles/secretmanager.viewer",
-    "write":  "roles/secretmanager.secretVersionAdder",
+    "read": "roles/secretmanager.secretAccessor",
+    "list": "roles/secretmanager.viewer",
+    "write": "roles/secretmanager.secretVersionAdder",
     "create": "roles/secretmanager.secretVersionAdder",
     "update": "roles/secretmanager.secretVersionAdder",
     "delete": "roles/secretmanager.admin",
@@ -79,9 +80,9 @@ _GCP_ROLE_MAP: dict[str, str] = {
 }
 
 _AZURE_ROLE_MAP: dict[str, str] = {
-    "read":   "Key Vault Secrets User",
-    "list":   "Key Vault Secrets User",
-    "write":  "Key Vault Secrets Officer",
+    "read": "Key Vault Secrets User",
+    "list": "Key Vault Secrets User",
+    "write": "Key Vault Secrets Officer",
     "create": "Key Vault Secrets Officer",
     "update": "Key Vault Secrets Officer",
     "delete": "Key Vault Secrets Officer",
@@ -89,8 +90,16 @@ _AZURE_ROLE_MAP: dict[str, str] = {
 }
 
 _PRINCIPAL_TYPES = frozenset(
-    {"vault_policy", "aws_iam_role", "aws_iam_user", "gcp_service_account",
-     "gcp_user", "gcp_group", "azure_sp", "azure_group"}
+    {
+        "vault_policy",
+        "aws_iam_role",
+        "aws_iam_user",
+        "gcp_service_account",
+        "gcp_user",
+        "gcp_group",
+        "azure_sp",
+        "azure_group",
+    }
 )
 
 
@@ -102,10 +111,8 @@ _PRINCIPAL_TYPES = frozenset(
 class PolicyTranslator:
     """Static class of pure translation functions.  Do not instantiate."""
 
-    def __new__(cls, *args: Any, **kwargs: Any) -> "PolicyTranslator":  # type: ignore[misc]
-        raise TypeError(
-            "PolicyTranslator cannot be instantiated — all methods are @staticmethod."
-        )
+    def __new__(cls, *args: Any, **kwargs: Any) -> PolicyTranslator:  # type: ignore[misc]
+        raise TypeError("PolicyTranslator cannot be instantiated — all methods are @staticmethod.")
 
     def __init_subclass__(cls, **kwargs: Any) -> None:  # pragma: no cover
         raise TypeError("PolicyTranslator is not meant to be subclassed.")
@@ -166,7 +173,7 @@ class PolicyTranslator:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def toHCL(doc: dict[str, Any]) -> str:
+    def toHCL(doc: dict[str, Any]) -> str:  # noqa: N802
         """Emit a Vault HCL policy string from *doc*.
 
         Wildcards ``*`` in paths are converted to ``+`` (single-segment glob)
@@ -219,7 +226,7 @@ class PolicyTranslator:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def toIAMJson(
+    def toIAMJson(  # noqa: N802
         doc: dict[str, Any],
         *,
         account_id: str = "*",
@@ -253,11 +260,13 @@ class PolicyTranslator:
                 ptype = p["type"]
                 pid = p["id"]
                 if ptype == "aws_iam_role":
-                    aws_principals.append(pid if pid.startswith("arn:") else
-                                          f"arn:aws:iam::{account_id}:role/{pid}")
+                    aws_principals.append(
+                        pid if pid.startswith("arn:") else f"arn:aws:iam::{account_id}:role/{pid}"
+                    )
                 elif ptype == "aws_iam_user":
-                    aws_principals.append(pid if pid.startswith("arn:") else
-                                          f"arn:aws:iam::{account_id}:user/{pid}")
+                    aws_principals.append(
+                        pid if pid.startswith("arn:") else f"arn:aws:iam::{account_id}:user/{pid}"
+                    )
 
             if not aws_principals:
                 continue
@@ -284,7 +293,7 @@ class PolicyTranslator:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def toGcpIamCond(
+    def toGcpIamCond(  # noqa: N802
         doc: dict[str, Any],
         *,
         project_id: str = "PROJECT_ID",
@@ -340,10 +349,7 @@ class PolicyTranslator:
             raw_path = entry["path"]
             if "*" in raw_path or "+" in raw_path:
                 prefix = raw_path.rstrip("/*+").rstrip("/")
-                cel = (
-                    f'resource.name.startsWith("projects/{project_id}'
-                    f'/secrets/{prefix}/")'
-                )
+                cel = f'resource.name.startsWith("projects/{project_id}/secrets/{prefix}/")'
                 slug = re.sub(r"[^a-z0-9_]", "_", prefix.lower())[:64]
                 binding["condition"] = {
                     "title": f"restrict_{slug}",
@@ -358,7 +364,7 @@ class PolicyTranslator:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def toAzureRbac(
+    def toAzureRbac(  # noqa: N802
         doc: dict[str, Any],
         *,
         subscription_id: str = "SUBSCRIPTION_ID",
@@ -409,12 +415,14 @@ class PolicyTranslator:
                 if key in seen:
                     continue
                 seen.add(key)
-                assignments.append({
-                    "role": role,
-                    "principal_id": pid,
-                    "principal_type": principal_type,
-                    "scope": scope,
-                })
+                assignments.append(
+                    {
+                        "role": role,
+                        "principal_id": pid,
+                        "principal_type": principal_type,
+                        "scope": scope,
+                    }
+                )
 
         return assignments
 

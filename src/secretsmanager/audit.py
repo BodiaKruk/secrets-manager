@@ -29,7 +29,6 @@ from __future__ import annotations
 import collections
 import json
 import threading
-import time
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -123,9 +122,7 @@ class AuditLogger:
         max_buffer_size: int = 10_000,
         export_path: str | Path | None = None,
     ) -> None:
-        self._buffer: collections.deque[AuditRecord] = collections.deque(
-            maxlen=max_buffer_size
-        )
+        self._buffer: collections.deque[AuditRecord] = collections.deque(maxlen=max_buffer_size)
         self._lock = threading.RLock()
         self._export_path = Path(export_path) if export_path else None
         if self._export_path:
@@ -168,9 +165,7 @@ class AuditLogger:
 
         if _PROMETHEUS_AVAILABLE:
             _OP_TOTAL.labels(operation=operation, backend=backend, result=result).inc()
-            _OP_LATENCY.labels(operation=operation, backend=backend).observe(
-                duration_ms / 1000.0
-            )
+            _OP_LATENCY.labels(operation=operation, backend=backend).observe(duration_ms / 1000.0)
 
         return record
 

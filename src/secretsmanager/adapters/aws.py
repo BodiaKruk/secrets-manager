@@ -6,7 +6,6 @@ Handles both SecretString (UTF-8 text) and SecretBinary (base64-encoded binary).
 from __future__ import annotations
 
 import base64
-import time
 from typing import Any
 
 import boto3  # type: ignore[import-untyped]
@@ -15,10 +14,10 @@ from botocore.exceptions import ClientError, EndpointResolutionError  # type: ig
 from secretsmanager.interface import (
     AccessDeniedError,
     BackendUnavailableError,
+    RotationPolicy,
     SecretNotFoundError,
     SecretProvider,
     SecretValue,
-    RotationPolicy,
 )
 
 _ACCESS_DENIED_CODES = frozenset({"AccessDeniedException", "UnauthorizedOperation"})
@@ -109,9 +108,7 @@ class AwsSecretsManagerAdapter(SecretProvider):
             "Use IAM temporary credentials (STS) directly."
         )
 
-    def set_secret(
-        self, name: str, value: str, *, metadata: dict[str, Any] | None = None
-    ) -> str:
+    def set_secret(self, name: str, value: str, *, metadata: dict[str, Any] | None = None) -> str:
         tags = [{"Key": k, "Value": str(v)} for k, v in (metadata or {}).items()]
         try:
             try:
