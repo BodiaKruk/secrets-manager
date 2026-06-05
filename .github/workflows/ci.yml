@@ -107,7 +107,7 @@ jobs:
         run: pip install -e ".[dev]"
 
       - name: Run Vault integration tests
-        run: pytest -m integration tests/integration/test_vault_integration.py -v
+        run: pytest -m integration tests/integration/test_vault_integration.py -v --no-cov
 
   # -----------------------------------------------------------
   # 3b. Integration — AWS via LocalStack  (~50 s)
@@ -148,7 +148,7 @@ jobs:
         run: pip install -e ".[dev]"
 
       - name: Run AWS integration tests
-        run: pytest -m integration tests/integration/test_aws_integration.py -v
+        run: pytest -m integration tests/integration/test_aws_integration.py -v --no-cov
 
   # -----------------------------------------------------------
   # 4. Security scan — pip-audit
